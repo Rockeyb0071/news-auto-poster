@@ -1,0 +1,59 @@
+"""
+config.py
+----------
+Saari settings aur credentials yahan se load hote hain (environment
+variables se -- GitHub Actions Secrets mein set karne honge).
+Kisi bhi script mein hardcoded key/token NAHI honi chahiye.
+"""
+
+import os
+
+# ---- Instagram / Facebook Graph API ----
+GRAPH_API_VERSION = "v23.0"
+IG_USER_ID = os.environ.get("NEWS_IG_USER_ID", "")
+IG_ACCESS_TOKEN = os.environ.get("NEWS_IG_ACCESS_TOKEN", "")
+IG_APP_ID = os.environ.get("NEWS_IG_APP_ID", "")
+IG_APP_SECRET = os.environ.get("NEWS_IG_APP_SECRET", "")
+
+# ---- News source ----
+NEWS_API_KEY = os.environ.get("NEWS_API_KEY", "")
+NEWS_API_URL = "https://newsapi.org/v2/top-headlines"
+NEWS_COUNTRY = "in"          # India ke top headlines
+NEWS_PAGE_SIZE = 5           # max kitni headlines fetch karni hain
+
+# ---- Unsplash (background images) ----
+UNSPLASH_ACCESS_KEY = os.environ.get("UNSPLASH_ACCESS_KEY", "")
+UNSPLASH_API_URL = "https://api.unsplash.com/photos/random"
+
+# ---- Anthropic (Hinglish translation) ----
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+
+# ---- Telegram (reuse same bot jo quotes wale mein use hua) ----
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
+
+# ---- Page branding ----
+PAGE_NAME = "Todays Coffee With News"
+PAGE_TAG = "Todays Coffee With News"
+
+# ---- File paths ----
+POSTS_DIR = "posts"
+STATE_FILE = "state.json"
+FONTS_DIR = "fonts"
+
+# ---- GitHub (for building public raw image URLs) ----
+GITHUB_REPOSITORY = os.environ.get("GITHUB_REPOSITORY", "")
+GITHUB_BRANCH = os.environ.get("GITHUB_BRANCH", "main")
+
+
+def build_caption(hinglish_summaries: list) -> str:
+    """
+    hinglish_summaries: list of Hinglish headline strings (already
+    translated), order carousel slides ke order se match karta hai.
+    """
+    lines = ["Aaj ki Top Headlines\n"]
+    for i, summary in enumerate(hinglish_summaries, start=1):
+        lines.append(f"{i}. {summary}")
+    lines.append(f"\n☕ {PAGE_TAG}")
+    lines.append("\n#news #india #dailynews #hinglish #updates")
+    return "\n".join(lines)

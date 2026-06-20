@@ -1,0 +1,146 @@
+"""
+generate_news_post.py
+------------------------
+Har headline ke liye ek carousel slide (PNG image) banata hai:
+  - Unsplash se topic-related background photo
+  - Background ko thoda dark-overlay kiya jaata hai taaki text padhne layak ho
+  - Upar Hinglish headline text + branding overlay hota hai
+
+Output: posts/news_YYYY-MM-DD_slide_1.png, _slide_2.png, etc.
+        posts/news_YYYY-MM-DD_meta.json (caption banane ke liye headlines list)
+"""
+
+import io
+import json
+import os
+from datetime import datetime, timezone
+
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
+
+import config
+from fetch_unsplash_image import fetch_background_image
+from translate_headline import translate_to_hinglish
+
+CANVAS_SIZE = (1080, 1080)  # Instagram square format
+
+
+def _load_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
+    filename = "Poppins-Bold.ttf" if bold else "Poppins-Regular.ttf"
+    path = os.path.join(config.FONTS_DIR, filename)
+    try:
+        return ImageFont.truetype(path, size)
+    except OSError:
+        # Fallback agar font file na mile -- crash hone se behtar hai default font
+        return ImageFont.load_default()
+
+
+def _wrap_text(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont, max_width: int) -> list:
+    words = text.split()
+    lines, current = [], ""
+    for word in words:
+        trial = f"{current} {word}".strip()
+        if draw.textlength(trial, font=font) <= max_width:
+            current = trial
+        else:
+            if current:
+                lines.append(current)
+            current = word
+    if current:
+        lines.append(current)
+    return lines
+
+
+def build_slide(headline_text: str, slide_number: int, total_slides: int) -> Image.Image:
+    bg_bytes = fetch_background_image(headline_text)
+    bg = Image.open(io.BytesIO(bg_bytes)).convert("RGB")
+
+    # Crop/resize to square canvas
+    bg.thumbnail((CANVAS_SIZE[0] * 2, CANVAS_SIZE[1] * 2))
+    bg = bg.resize(CANVAS_SIZE) if bg.size != CANVAS_SIZE else bg
+
+    # Dark overlay for readability
+    overlay = Image.new("RGBA", CANVAS_SIZE, (0, 0, 0, 130))
+    bg = bg.convert("RGBA")
+    bg.alpha_composite(overlay)
+
+    # Slight blur on background for a polished look (optional, subtle)
+    bg = bg.filter(ImageFilter.GaussianBlur(1))
+
+    draw = ImageDraw.Draw(bg)
+
+    headline_font = _load_font(58, bold=True)
+    brand_font = _load_font(34, bold=False)
+    counter_font = _load_font(28, bold=False)
+
+    margin = 80
+    max_text_width = CANVAS_SIZE[0] - (2 * margin)
+
+    lines = _wrap_text(draw, headline_text, headline_font, max_text_width)
+    line_height = 70
+    total_text_height = len(lines) * line_height
+    start_y = (CANVAS_SIZE[1] - total_text_height) // 2
+
+    for i, line in enumerate(lines):
+        line_width = draw.textlength(line, font=headline_font)
+        x = (CANVAS_SIZE[0] - line_width) // 2
+        y = start_y + (i * line_height)
+        draw.text((x, y), line, font=headline_font, fill=(255, 255, 255, 255))
+
+    # Branding bottom-left
+    draw.text((margin, CANVAS_SIZE[1] - 100), config.PAGE_TAG, font=brand_font, fill=(255, 200, 80, 255))
+
+    # Slide counter bottom-right
+    counter_text = f"{slide_number}/{total_slides}"
+    counter_width = draw.textlength(counter_text, font=counter_font)
+    draw.text(
+        (CANVAS_SIZE[0] - margin - counter_width, CANVAS_SIZE[1] - 95),
+        counter_text, font=counter_font, fill=(255, 255, 255, 200),
+    )
+
+    return bg.convert("RGB")
+
+
+def generate_carousel(headlines: list) -> dict:
+    """
+    headlines: list of dicts from fetch_news.fetch_top_headlines()
+    Returns metadata dict with slide paths + Hinglish captions, also
+    writes a meta JSON file used by post_news_to_instagram.py
+    """
+    os.makedirs(config.POSTS_DIR, exist_ok=True)
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    slide_paths = []
+    hinglish_summaries = []
+
+    for idx, headline in enumerate(headlines, start=1):
+        hinglish_text = translate_to_hinglish(headline["title"], headline.get("description", ""))
+        slide_img = build_slide(hinglish_text, idx, len(headlines))
+
+        slide_path = os.path.join(config.POSTS_DIR, f"news_{today}_slide_{idx}.png")
+        slide_img.save(slide_path, "PNG")
+        slide_paths.append(slide_path)
+        hinglish_summaries.append(hinglish_text)
+
+    meta = {
+        "date": today,
+        "slide_paths": slide_paths,
+        "hinglish_summaries": hinglish_summaries,
+        "source_hashes": [h["hash"] for h in headlines],
+        "source_urls": [h["url"] for h in headlines],
+    }
+
+    meta_path = os.path.join(config.POSTS_DIR, f"news_{today}_meta.json")
+    with open(meta_path, "w", encoding="utf-8") as f:
+        json.dump(meta, f, indent=2, ensure_ascii=False)
+
+    return meta
+
+
+if __name__ == "__main__":
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from fetch_news import fetch_top_headlines
+
+    test_headlines = fetch_top_headlines(set())
+    result = generate_carousel(test_headlines)
+    print(json.dumps(result, indent=2, ensure_ascii=False))
