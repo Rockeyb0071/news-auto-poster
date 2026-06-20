@@ -1,59 +1,55 @@
 """
-translate_headline.py
------------------------
-Har English news headline (+ optional short description) ko natural
-Hinglish mein rewrite karta hai, Anthropic API (Claude) use karke.
-
-ANTHROPIC_API_KEY environment variable / GitHub Secret se aana chahiye.
+fetch_unsplash_image.py
+-------------------------
+News headline ke topic se related ek background photo Unsplash se
+fetch karta hai (free API). Agar koi match na mile ya request fail
+ho jaye, ek generic "newspaper" fallback query use karta hai.
 """
 
 import requests
 
 import config
 
-ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
-ANTHROPIC_MODEL = "claude-sonnet-4-6"
 
-
-class TranslationError(Exception):
+class ImageFetchError(Exception):
     pass
 
 
-def translate_to_hinglish(title: str, description: str = "") -> str:
-    if not config.ANTHROPIC_API_KEY:
-        raise TranslationError("ANTHROPIC_API_KEY set nahi hai -- GitHub Secrets check karo.")
-
-    source_text = title if not description else f"{title}\n\n{description}"
-
-    prompt = (
-        "Neeche ek English news headline (aur shayad chhota description) diya hai. "
-        "Ise natural Hinglish mein 1-2 short lines mein rewrite karo -- jaise koi "
-        "Indian Instagram news page likhta hai. Roman script use karo (Devanagari nahi). "
-        "Sirf Hinglish text wapas karo, koi extra explanation ya quotes nahi.\n\n"
-        f"News:\n{source_text}"
-    )
-
-    headers = {
-        "content-type": "application/json",
-        "x-api-key": config.ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
+def _extract_keyword(title: str) -> str:
+    """
+    Headline se ek simple search keyword banata hai. Pura headline
+    Unsplash search mein daalna noisy results deta hai, isliye sirf
+    pehle 3-4 significant words use karte hain.
+    """
+    stopwords = {
+        "the", "a", "an", "of", "in", "on", "to", "for", "and", "is",
+        "are", "amid", "after", "over", "as", "with", "by",
     }
-    payload = {
-        "model": ANTHROPIC_MODEL,
-        "max_tokens": 200,
-        "messages": [{"role": "user", "content": prompt}],
-    }
+    words = [w for w in title.split() if w.lower() not in stopwords]
+    return " ".join(words[:4]) if words else title
 
-    resp = requests.post(ANTHROPIC_API_URL, headers=headers, json=payload, timeout=30)
-    data = resp.json()
 
-    if "content" not in data:
-        raise TranslationError(f"Translation failed: {data}")
+def fetch_background_image(title: str) -> bytes:
+    if not config.UNSPLASH_ACCESS_KEY:
+        raise ImageFetchError("UNSPLASH_ACCESS_KEY set nahi hai -- GitHub Secrets check karo.")
 
-    text_parts = [block["text"] for block in data["content"] if block.get("type") == "text"]
-    hinglish_text = "".join(text_parts).strip()
+    keyword = _extract_keyword(title)
+    headers = {"Authorization": f"Client-ID {config.UNSPLASH_ACCESS_KEY}"}
 
-    if not hinglish_text:
-        raise TranslationError(f"Empty translation response: {data}")
+    for query in (keyword, "news newspaper"):  # fallback agar specific keyword fail ho
+        params = {"query": query, "orientation": "squarish"}
+        resp = requests.get(config.UNSPLASH_API_URL, headers=headers, params=params, timeout=30)
 
-    return hinglish_text
+        if resp.status_code != 200:
+            continue
+
+        data = resp.json()
+        image_url = (data.get("urls") or {}).get("regular")
+        if not image_url:
+            continue
+
+        img_resp = requests.get(image_url, timeout=30)
+        if img_resp.status_code == 200:
+            return img_resp.content
+
+    raise ImageFetchError(f"Koi background image nahi mili keyword='{keyword}' ke liye.")

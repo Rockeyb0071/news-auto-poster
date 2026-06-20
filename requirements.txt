@@ -25,9 +25,6 @@ NEWS_PAGE_SIZE = 5           # max kitni headlines fetch karni hain
 UNSPLASH_ACCESS_KEY = os.environ.get("UNSPLASH_ACCESS_KEY", "")
 UNSPLASH_API_URL = "https://api.unsplash.com/photos/random"
 
-# ---- Anthropic (Hinglish translation) ----
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-
 # ---- Telegram (reuse same bot jo quotes wale mein use hua) ----
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
@@ -46,14 +43,15 @@ GITHUB_REPOSITORY = os.environ.get("GITHUB_REPOSITORY", "")
 GITHUB_BRANCH = os.environ.get("GITHUB_BRANCH", "main")
 
 
-def build_caption(hinglish_summaries: list) -> str:
+def build_caption(headline_titles: list) -> str:
     """
-    hinglish_summaries: list of Hinglish headline strings (already
-    translated), order carousel slides ke order se match karta hai.
+    headline_titles: list of English headline strings, order carousel
+    slides ke order se match karta hai. Caption ke labels Hinglish
+    mein hain, headlines English mein (original wording).
     """
     lines = ["Aaj ki Top Headlines\n"]
-    for i, summary in enumerate(hinglish_summaries, start=1):
-        lines.append(f"{i}. {summary}")
+    for i, title in enumerate(headline_titles, start=1):
+        lines.append(f"{i}. {title}")
     lines.append(f"\n☕ {PAGE_TAG}")
-    lines.append("\n#news #india #dailynews #hinglish #updates")
+    lines.append("\n#news #india #dailynews #updates")
     return "\n".join(lines)

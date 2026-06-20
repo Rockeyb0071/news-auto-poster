@@ -81,7 +81,7 @@ def main():
         f"{config.GITHUB_BRANCH}/{path}"
         for path in meta["slide_paths"]
     ]
-    caption = config.build_caption(meta["hinglish_summaries"])
+    caption = config.build_caption(meta["headline_titles"])
 
     print("Publishing carousel to Instagram...")
     try:
@@ -93,7 +93,7 @@ def main():
     permalink = result["permalink"] or "(permalink not returned yet)"
     print(f"Published! media_id={result['media_id']} permalink={permalink} slides={result['child_count']}")
 
-    headline_list_text = "\n".join(f"- {s}" for s in meta["hinglish_summaries"])
+    headline_list_text = "\n".join(f"- {s}" for s in meta["headline_titles"])
     notify(
         f"✅ News carousel upload ho gaya! ({result['child_count']} slides)\n\n"
         f"{headline_list_text}\n\n"
@@ -104,7 +104,7 @@ def main():
     state.setdefault("posts", []).append({
         "media_id": result["media_id"],
         "permalink": permalink,
-        "headlines": meta["hinglish_summaries"],
+        "headlines": meta["headline_titles"],
         "posted_at": datetime.now(timezone.utc).isoformat(),
         "views_notified": False,
     })
